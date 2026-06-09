@@ -57,8 +57,16 @@ export async function postBriefing(sections: BriefingSections, dateStr: string):
     },
   ];
 
+  let channelId = process.env.SLACK_CHANNEL_ID!;
+
+  // User IDs (U...) need conversations.open to resolve to a DM channel ID
+  if (channelId.startsWith('U')) {
+    const dm = await slack.conversations.open({ users: channelId });
+    channelId = dm.channel?.id ?? channelId;
+  }
+
   await slack.chat.postMessage({
-    channel: process.env.SLACK_CHANNEL_ID!,
+    channel: channelId,
     text: `☀️ Morning Briefing — ${dateStr}`,
     blocks: blocks.slice(0, 50),
   });
