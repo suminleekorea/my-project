@@ -1,5 +1,6 @@
 import { WebClient } from '@slack/web-api';
 import type { BriefingSections, CityWeather } from './types';
+import type { CoachingSections } from './coaching';
 import { formatWeather } from './weather';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -16,6 +17,30 @@ function section(emoji: string, title: string, body: string) {
 }
 
 const divider = { type: 'divider' };
+
+async function resolveChannelId(): Promise<string> {
+  try {
+    const auth = await slack.auth.test();
+    console.log(`[slack] Bot installed in workspace: "${auth.team}" (team ${auth.team_id})`);
+  } catch (err) {
+    console.error('[slack] auth.test failed — check SLACK_BOT_TOKEN:', err);
+  }
+
+  let channelId = (process.env.SLACK_CHANNEL_ID ?? '').trim();
+
+  if (channelId.includes('@')) {
+    const found = await slack.users.lookupByEmail({ email: channelId });
+    const userId = found.user?.id;
+    if (!userId) throw new Error(`No Slack user found for email ${channelId}`);
+    const dm = await slack.conversations.open({ users: userId });
+    channelId = dm.channel?.id ?? userId;
+  } else if (channelId.startsWith('U') || channelId.startsWith('W')) {
+    const dm = await slack.conversations.open({ users: channelId });
+    channelId = dm.channel?.id ?? channelId;
+  }
+
+  return channelId;
+}
 
 export async function postBriefing(
   sections: BriefingSections,
@@ -65,32 +90,7 @@ export async function postBriefing(
     },
   ];
 
-  // Diagnostic: log which workspace this bot is actually installed in.
-  // Helps catch the common "wrong workspace" mistake where SLACK_CHANNEL_ID
-  // is a user ID from a different workspace than the bot.
-  try {
-    const auth = await slack.auth.test();
-    console.log(`[slack] Bot installed in workspace: "${auth.team}" (team ${auth.team_id})`);
-  } catch (err) {
-    console.error('[slack] auth.test failed — check SLACK_BOT_TOKEN:', err);
-  }
-
-  let channelId = (process.env.SLACK_CHANNEL_ID ?? '').trim();
-
-  if (channelId.includes('@')) {
-    // Treat as an email — resolve to the user in THIS bot's workspace.
-    // Robust across workspaces (requires users:read.email scope).
-    const found = await slack.users.lookupByEmail({ email: channelId });
-    const userId = found.user?.id;
-    if (!userId) throw new Error(`No Slack user found for email ${channelId}`);
-    const dm = await slack.conversations.open({ users: userId });
-    channelId = dm.channel?.id ?? userId;
-  } else if (channelId.startsWith('U') || channelId.startsWith('W')) {
-    // User ID — open a DM channel to it.
-    const dm = await slack.conversations.open({ users: channelId });
-    channelId = dm.channel?.id ?? channelId;
-  }
-  // Otherwise assume it's already a channel ID (C.../G.../D...) and post directly.
+  const channelId = await resolveChannelId();
 
   await slack.chat.postMessage({
     channel: channelId,
@@ -99,4 +99,43 @@ export async function postBriefing(
   });
 
   console.log(`[slack] Briefing posted to ${channelId}`);
+}
+
+export async function postCoaching(sections: CoachingSections, dateStr: string): Promise<void> {
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `🧠 Focus Coaching — ${dateStr}`, emoji: true },
+    },
+    divider,
+    section('🎯', 'Best Focus Window Today', sections.focusWindow),
+    divider,
+    section('🔍', 'Pattern I Noticed', sections.patternObservation),
+    divider,
+    section('⚡', 'Watch Out For', sections.watchOut),
+    divider,
+    section('✅', "Today's One Commitment", sections.oneCommitment),
+    divider,
+    section('🔋', 'Energy Tip', sections.energyTip),
+    divider,
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `_Generated ${new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore', dateStyle: 'medium', timeStyle: 'short' })} SGT_`,
+        },
+      ],
+    },
+  ];
+
+  const channelId = await resolveChannelId();
+
+  await slack.chat.postMessage({
+    channel: channelId,
+    text: `🧠 Focus Coaching — ${dateStr}`,
+    blocks,
+  });
+
+  console.log(`[slack] Coaching posted to ${channelId}`);
 }
