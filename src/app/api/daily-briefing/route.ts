@@ -4,6 +4,7 @@ import { fetchRecentEmails } from '@/lib/gmail';
 import { fetchEvents, dayRange } from '@/lib/calendar';
 import { generateBriefing } from '@/lib/claude';
 import { postBriefing } from '@/lib/slack';
+import { fetchWeather } from '@/lib/weather';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -29,10 +30,11 @@ export async function GET(req: NextRequest) {
     const yesterday = dayRange(-1, tz);
     const today = dayRange(0, tz);
 
-    const [emails, yesterdayEvents, todayEvents] = await Promise.all([
+    const [emails, yesterdayEvents, todayEvents, weather] = await Promise.all([
       fetchRecentEmails(oauth, 48),
       fetchEvents(oauth, yesterday.start, yesterday.end, tz),
       fetchEvents(oauth, today.start, today.end, tz),
+      fetchWeather(),
     ]);
 
     console.log(
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
       timezone: tz,
     });
 
-    await postBriefing(sections, dateStr);
+    await postBriefing(sections, dateStr, weather);
 
     return NextResponse.json({
       ok: true,

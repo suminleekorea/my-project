@@ -21,6 +21,17 @@ export interface CalendarEvent {
   isAllDay: boolean;
 }
 
+export interface CityWeather {
+  city: string;
+  flag: string;
+  emoji: string;
+  label: string;
+  current: number;
+  high: number;
+  low: number;
+  rainChance: number | null;
+}
+
 export interface BriefingInput {
   emails: EmailThread[];
   yesterdayEvents: CalendarEvent[];

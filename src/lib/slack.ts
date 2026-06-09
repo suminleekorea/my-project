@@ -1,5 +1,6 @@
 import { WebClient } from '@slack/web-api';
-import type { BriefingSections } from './types';
+import type { BriefingSections, CityWeather } from './types';
+import { formatWeather } from './weather';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -16,7 +17,11 @@ function section(emoji: string, title: string, body: string) {
 
 const divider = { type: 'divider' };
 
-export async function postBriefing(sections: BriefingSections, dateStr: string): Promise<void> {
+export async function postBriefing(
+  sections: BriefingSections,
+  dateStr: string,
+  weather: CityWeather[] = [],
+): Promise<void> {
   const draftText = sections.draftReplies.length
     ? sections.draftReplies
         .map(
@@ -26,12 +31,15 @@ export async function postBriefing(sections: BriefingSections, dateStr: string):
         .join('\n\n')
     : 'No urgent emails requiring a reply right now.';
 
+  const weatherText = formatWeather(weather);
+
   const blocks = [
     {
       type: 'header',
       text: { type: 'plain_text', text: `☀️ Morning Briefing — ${dateStr}`, emoji: true },
     },
     divider,
+    ...(weatherText ? [section('🌡️', 'Weather', weatherText), divider] : []),
     section('📋', 'Yesterday at a Glance', sections.yesterdaySummary),
     divider,
     section('🤝', 'Brand & Partnership Updates', sections.brandPartnerships),

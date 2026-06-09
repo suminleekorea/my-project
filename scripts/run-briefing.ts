@@ -3,6 +3,7 @@ import { fetchRecentEmails } from '../src/lib/gmail.js';
 import { fetchEvents, dayRange } from '../src/lib/calendar.js';
 import { generateBriefing } from '../src/lib/claude.js';
 import { postBriefing } from '../src/lib/slack.js';
+import { fetchWeather } from '../src/lib/weather.js';
 
 async function main() {
   const tz = process.env.TIMEZONE ?? 'Asia/Singapore';
@@ -21,14 +22,15 @@ async function main() {
   const yesterday = dayRange(-1, tz);
   const today = dayRange(0, tz);
 
-  const [emails, yesterdayEvents, todayEvents] = await Promise.all([
+  const [emails, yesterdayEvents, todayEvents, weather] = await Promise.all([
     fetchRecentEmails(oauth, 48),
     fetchEvents(oauth, yesterday.start, yesterday.end, tz),
     fetchEvents(oauth, today.start, today.end, tz),
+    fetchWeather(),
   ]);
 
   console.log(
-    `[briefing] ${emails.length} emails · ${yesterdayEvents.length} yesterday · ${todayEvents.length} today`,
+    `[briefing] ${emails.length} emails · ${yesterdayEvents.length} yesterday · ${todayEvents.length} today · ${weather.length} cities weather`,
   );
 
   const sections = await generateBriefing({
@@ -39,7 +41,7 @@ async function main() {
     timezone: tz,
   });
 
-  await postBriefing(sections, dateStr);
+  await postBriefing(sections, dateStr, weather);
   console.log('[briefing] Posted to Slack ✓');
 }
 
