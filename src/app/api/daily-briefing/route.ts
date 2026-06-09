@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getOAuthClient } from '@/lib/google-auth';
+import { fetchRecentEmails } from '@/lib/gmail';
+import { fetchEvents, dayRange } from '@/lib/calendar';
+import { generateBriefing } from '@/lib/claude';
+import { postBriefing } from '@/lib/slack';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  const auth = req.headers.get('authorization');
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const tz = process.env.TIMEZONE ?? 'Asia/Singapore';
+
+  try {
+    const dateStr = new Date().toLocaleDateString('en-SG', {
+      timeZone: tz,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const oauth = getOAuthClient();
+    const yesterday = dayRange(-1, tz);
+    const today = dayRange(0, tz);
+
+    const [emails, yesterdayEvents, todayEvents] = await Promise.all([
+      fetchRecentEmails(oauth, 48),
+      fetchEvents(oauth, yesterday.start, yesterday.end, tz),
+      fetchEvents(oauth, today.start, today.end, tz),
+    ]);
+
+    console.log(
+      `[briefing] ${dateStr} — ${emails.length} emails, ${yesterdayEvents.length} yesterday, ${todayEvents.length} today`,
+    );
+
+    const sections = await generateBriefing({
+      emails,
+      yesterdayEvents,
+      todayEvents,
+      currentDate: dateStr,
+      timezone: tz,
+    });
+
+    await postBriefing(sections, dateStr);
+
+    return NextResponse.json({
+      ok: true,
+      date: dateStr,
+      stats: { emails: emails.length, yesterdayEvents: yesterdayEvents.length, todayEvents: todayEvents.length },
+    });
+  } catch (err) {
+    console.error('[briefing] fatal error:', err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
