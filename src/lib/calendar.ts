@@ -73,11 +73,10 @@ export function dayRange(offsetDays: number, timezone: string): { start: Date; e
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false,
   });
-  // Parse the tz wall-clock representation as UTC to measure the offset
   const [datePart, timePart] = tzStr.split(', ');
   const [mo, dy, yr] = datePart.split('/');
   const tzAsUtcMs = Date.parse(`${yr}-${mo}-${dy}T${timePart}Z`);
-  const offsetMs = tzAsUtcMs - ref.getTime(); // positive for UTC+ zones
+  const offsetMs = tzAsUtcMs - ref.getTime();
 
   // Midnight of target day in the timezone = UTC midnight minus the offset
   const start = new Date(Date.parse(`${ty}-${tm}-${td}T00:00:00Z`) - offsetMs);
