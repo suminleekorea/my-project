@@ -57,17 +57,38 @@ export async function postBriefing(sections: BriefingSections, dateStr: string):
     },
   ];
 
-  let channelId = process.env.SLACK_CHANNEL_ID!;
+  // Diagnostic: log which workspace this bot is actually installed in.
+  // Helps catch the common "wrong workspace" mistake where SLACK_CHANNEL_ID
+  // is a user ID from a different workspace than the bot.
+  try {
+    const auth = await slack.auth.test();
+    console.log(`[slack] Bot installed in workspace: "${auth.team}" (team ${auth.team_id})`);
+  } catch (err) {
+    console.error('[slack] auth.test failed — check SLACK_BOT_TOKEN:', err);
+  }
 
-  // User IDs (U...) need conversations.open to resolve to a DM channel ID
-  if (channelId.startsWith('U')) {
+  let channelId = (process.env.SLACK_CHANNEL_ID ?? '').trim();
+
+  if (channelId.includes('@')) {
+    // Treat as an email — resolve to the user in THIS bot's workspace.
+    // Robust across workspaces (requires users:read.email scope).
+    const found = await slack.users.lookupByEmail({ email: channelId });
+    const userId = found.user?.id;
+    if (!userId) throw new Error(`No Slack user found for email ${channelId}`);
+    const dm = await slack.conversations.open({ users: userId });
+    channelId = dm.channel?.id ?? userId;
+  } else if (channelId.startsWith('U') || channelId.startsWith('W')) {
+    // User ID — open a DM channel to it.
     const dm = await slack.conversations.open({ users: channelId });
     channelId = dm.channel?.id ?? channelId;
   }
+  // Otherwise assume it's already a channel ID (C.../G.../D...) and post directly.
 
   await slack.chat.postMessage({
     channel: channelId,
     text: `☀️ Morning Briefing — ${dateStr}`,
     blocks: blocks.slice(0, 50),
   });
+
+  console.log(`[slack] Briefing posted to ${channelId}`);
 }
