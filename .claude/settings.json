@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "news-monitor": {
+      "source": {
+        "source": "github",
+        "repo": "Wendy-Nam/pr-monitor-plugin"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "pr-monitor@news-monitor": true
+  }
+}
